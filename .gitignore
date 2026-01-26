@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.sqlite3
+.env
+.venv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data (don’t upload raw large files)
+data/raw/*
+data/processed/images/*
+data/processed/text/*
+data/processed/audio/*
+
+# Model caches
+*.pt
+*.bin

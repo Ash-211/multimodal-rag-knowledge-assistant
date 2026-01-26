@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+streamlit
+pymupdf
+pillow
+sentence-transformers
+faiss-cpu
+torch
+transformers
+python-multipart
+langchain
+tqdm
