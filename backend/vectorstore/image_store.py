@@ -3,7 +3,8 @@ import torch
 import faiss
 import numpy as np
 from PIL import Image
-
+import os
+import pickle
 class ImageVectorStore:
     def __init__(self):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -35,3 +36,17 @@ class ImageVectorStore:
         
         _, idxs = self.index.search(q_emb.cpu().numpy().astype("float32"), k)
         return [self.metadata[i] for i in idxs[0]]
+    
+    def save_local(self, folder_path):
+        os.makedirs(folder_path, exist_ok=True)
+
+        faiss.write_index(self.index, os.path.join(folder_path, "index.faiss"))
+
+        with open(os.path.join(folder_path, "metadata.pkl"), "wb") as f:
+            pickle.dump(self.metadata, f)
+    
+    def load_local(self, folder_path):
+        self.index = faiss.read_index(os.path.join(folder_path, "index.faiss"))
+            
+        with open(os.path.join(folder_path, "metadata.pkl"), "rb") as f:
+            self.metadata = pickle.load(f)

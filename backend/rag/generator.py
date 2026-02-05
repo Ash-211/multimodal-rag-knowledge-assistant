@@ -11,7 +11,7 @@ Break the following user question into smaller, independent search queries.
 Question:
 {user_query}
 
-Return 2–4 focused sub-queries, if the query can be broken down, else return a singular query.
+Return 2–4 focused sub-queries related to the input documents, if the query can be broken down, else return a singular query.
 Do NOT answer the question.
 Only return the search queries.
 """
@@ -36,7 +36,7 @@ def generate_answer(query, text_contexts, image_contexts):
 
     prompt = f"""
 You are a multimodal AI Knowledge assistant. Use ONLY the provided context to answer the question. If the answer is not in the context, say you don't know.
-Try to provide answers to the user to the best of your ability.
+Provide detailed, informative answers to the user to the best of your ability.
 
 TEXT CONTEXT:
 {text_block}

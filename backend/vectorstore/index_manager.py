@@ -5,17 +5,6 @@ class IndexManager:
 
     def retrieve(self, query):
 
-        docs = self.doc_index.search(query, k=2)
-
-        all_chunks = []
-
-
-        for doc in docs:
-            source = doc["source"]
-            chunks = self.chunk_index.search(query, source, k=6)
-            all_chunks.extend([
-                {"source": source, "content": c}
-                for c in chunks
-            ])
-
+        # Search global chunk index directly
+        all_chunks = self.chunk_index.search(query, k=10)
         return all_chunks

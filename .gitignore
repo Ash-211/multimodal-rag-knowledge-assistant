@@ -11,11 +11,18 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
-# Data (don’t upload raw large files)
+# Data (don't upload raw large files)
 data/raw/*
 data/processed/images/*
 data/processed/text/*
 data/processed/audio/*
+data/users/
+data/*.db
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
 
 # Model caches
 *.pt

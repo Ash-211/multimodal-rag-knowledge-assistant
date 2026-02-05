@@ -9,5 +9,5 @@ img_path = ingest_image(
 img = Image.open(img_path)
 img.verify()
 
-print("✓ Standalone image ingestion works")
+print(" Standalone image ingestion works")
 

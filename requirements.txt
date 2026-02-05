@@ -10,3 +10,6 @@ transformers
 python-multipart
 langchain
 tqdm
+openai-whisper
+python-jose[cryptography]
+passlib[bcrypt]
