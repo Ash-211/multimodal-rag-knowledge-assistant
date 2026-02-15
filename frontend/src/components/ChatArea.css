@@ -129,7 +129,7 @@
     margin: 0 auto;
     display: flex;
     flex-direction: column;
-    gap: var(--space-6);
+    gap: var(--space-1);
 }
 
 /* Empty State */
@@ -202,8 +202,8 @@
     color: var(--text-primary);
 }
 
-/* Loading Bubble */
-.message-bubble.loading {
+/* Loading Row */
+.message-row.loading {
     animation: fadeInUp var(--transition-slow) ease;
 }
 

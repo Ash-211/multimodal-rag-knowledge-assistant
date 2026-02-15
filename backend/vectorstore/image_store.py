@@ -30,12 +30,15 @@ class ImageVectorStore:
             self.metadata.append(enriched_meta)
 
     def search(self, query_text, k=5):
+        if self.index.ntotal == 0:
+            return []
+        k = min(k, self.index.ntotal)
         text_tokens = clip.tokenize([query_text]).to(self.device)
         with torch.no_grad():
             q_emb = self.model.encode_text(text_tokens)
         
         _, idxs = self.index.search(q_emb.cpu().numpy().astype("float32"), k)
-        return [self.metadata[i] for i in idxs[0]]
+        return [self.metadata[i] for i in idxs[0] if 0 <= i < len(self.metadata)]
     
     def save_local(self, folder_path):
         os.makedirs(folder_path, exist_ok=True)

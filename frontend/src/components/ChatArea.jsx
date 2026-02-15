@@ -169,21 +169,25 @@ function ChatArea({
                             ))}
 
                             {isLoading && (
-                                <div className="message-bubble assistant loading">
-                                    <div className="assistant-avatar">
-                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                                            <path
-                                                d="M12 2L2 7l10 5 10-5-10-5z"
-                                                stroke="currentColor"
-                                                strokeWidth="1.5"
-                                            />
-                                        </svg>
-                                    </div>
-                                    <div className="message-content">
-                                        <div className="typing-indicator">
-                                            <span></span>
-                                            <span></span>
-                                            <span></span>
+                                <div className="message-row assistant loading">
+                                    <div className="message-inner">
+                                        <div className="role-icon-wrapper">
+                                            <div className="role-icon assistant-icon">
+                                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                                                    <path
+                                                        d="M12 2L2 7l10 5 10-5-10-5z"
+                                                        stroke="currentColor"
+                                                        strokeWidth="1.5"
+                                                    />
+                                                </svg>
+                                            </div>
+                                        </div>
+                                        <div className="message-body">
+                                            <div className="typing-indicator">
+                                                <span></span>
+                                                <span></span>
+                                                <span></span>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>

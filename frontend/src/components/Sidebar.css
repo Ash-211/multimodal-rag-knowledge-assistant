@@ -241,6 +241,24 @@
     opacity: 1;
 }
 
+/* Clear Data */
+.clear-data-section {
+    margin-top: auto;
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--border-subtle);
+}
+
+.clear-data-btn {
+    width: 100%;
+    color: var(--error);
+    justify-content: center;
+    gap: var(--space-2);
+}
+
+.clear-data-btn:hover {
+    background: var(--error-bg);
+}
+
 @media (max-width: 768px) {
     .sidebar {
         position: fixed;

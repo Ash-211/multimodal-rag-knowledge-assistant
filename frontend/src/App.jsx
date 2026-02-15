@@ -19,7 +19,9 @@ function App() {
 
     // Fetch documents on mount
     useEffect(() => {
+
         if (isAuthenticated) {
+            fetchDocuments()
             // Load messages from localStorage if available
             const saved = localStorage.getItem('chat_messages')
             if (saved) {
@@ -97,6 +99,24 @@ function App() {
         setDocuments([])
     }
 
+    const handleClearData = async () => {
+        if (!window.confirm('This will delete ALL of your documents and chat history. Are you sure? '))
+            return
+        try {
+            await fetch(`${API_BASE}/clear-data`, {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${token}`
+                },
+            })
+        } catch (err) {
+            console.error('Failed to clear data:', err)
+        }
+        setMessages([])
+        setDocuments([])
+        localStorage.removeItem('chat_messages')
+    }
+
     const handleUpload = async (file) => {
         try {
             setError(null)
@@ -134,6 +154,7 @@ function App() {
                         : doc
                 )
             )
+            await fetchDocuments()
 
             return data
         } catch (err) {
@@ -147,7 +168,40 @@ function App() {
             throw err
         }
     }
-
+    const fetchDocuments = async () => {
+        try {
+            const res = await fetch(`${API_BASE}/documents`, {
+                headers: {
+                    Authorization: `Bearer ${token}`
+                },
+            })
+            if (res.ok) {
+                const data = await res.json()
+                setDocuments(data.documents.map((doc, i) => ({
+                    id: doc.name + i,
+                    name: doc.name,
+                    size: doc.size,
+                    status: 'ready'
+                })))
+            }
+        } catch (err) {
+            console.error('Failed to fetch documents:', err)
+        }
+    }
+    const handleDeleteDocument = async (docId, docName) => {
+        try {
+            const res = await fetch(`${API_BASE}/documents/${encodeURIComponent(docName)}`, {
+                method: 'DELETE',
+                headers: { Authorization: `Bearer ${token}` },
+            })
+            if (res.ok) {
+                setDocuments(prev => prev.filter(d => d.id !== docId))
+            }
+        }
+        catch (err) {
+            console.error('Failed to delete document: ', err)
+        }
+    }
     const handleSendMessage = async (content) => {
         if (!content.trim() || isLoading) return
 
@@ -158,12 +212,14 @@ function App() {
             timestamp: new Date().toISOString(),
         }
 
+        const aiMessageId = Date.now() + 1
+
         setMessages(prev => [...prev, userMessage])
         setIsLoading(true)
         setError(null)
 
         try {
-            const res = await fetch(`${API_BASE}/chat`, {
+            const res = await fetch(`${API_BASE}/chat/stream`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -176,32 +232,76 @@ function App() {
                 throw new Error('Failed to get response')
             }
 
-            const data = await res.json()
-
-            const aiMessage = {
-                id: Date.now() + 1,
+            // Response arrived — replace typing indicator with the streaming message
+            setIsLoading(false)
+            setMessages(prev => [...prev, {
+                id: aiMessageId,
                 role: 'assistant',
-                content: data.answer,
-                sources: data.sources || [],
-                images: data.images || [],
+                content: '',
+                sources: [],
+                images: [],
                 timestamp: new Date().toISOString(),
-            }
+            }])
 
-            setMessages(prev => [...prev, aiMessage])
+            const reader = res.body.getReader()
+            const decoder = new TextDecoder()
+            let buffer = ''
+
+            while (true) {
+                const { done, value } = await reader.read()
+                if (done) break
+
+                buffer += decoder.decode(value, { stream: true })
+
+                // Parse SSE lines from buffer
+                const lines = buffer.split('\n')
+                buffer = lines.pop() // Keep incomplete line in buffer
+
+                for (const line of lines) {
+                    if (!line.startsWith('data: ')) continue
+
+                    try {
+                        const event = JSON.parse(line.slice(6))
+
+                        if (event.type === 'text') {
+                            // Append text chunk to the assistant message
+                            setMessages(prev => prev.map(msg =>
+                                msg.id === aiMessageId
+                                    ? { ...msg, content: msg.content + event.content }
+                                    : msg
+                            ))
+                        } else if (event.type === 'done') {
+                            // Attach sources and images
+                            setMessages(prev => prev.map(msg =>
+                                msg.id === aiMessageId
+                                    ? { ...msg, sources: event.sources || [], images: event.images || [] }
+                                    : msg
+                            ))
+                        } else if (event.type === 'error') {
+                            setMessages(prev => prev.map(msg =>
+                                msg.id === aiMessageId
+                                    ? { ...msg, content: msg.content + '\n\nError: ' + event.content }
+                                    : msg
+                            ))
+                        }
+                    } catch (e) {
+                        // Skip unparseable lines
+                    }
+                }
+            }
         } catch (err) {
             setError(err.message)
-            // Add error message
-            setMessages(prev => [
-                ...prev,
-                {
-                    id: Date.now() + 1,
+            setIsLoading(false)
+            setMessages(prev => {
+                // Remove empty assistant message and add error
+                const filtered = prev.filter(m => m.id !== aiMessageId || m.content)
+                return [...filtered, {
+                    id: Date.now() + 2,
                     role: 'error',
                     content: 'Failed to get response. Please try again.',
                     timestamp: new Date().toISOString(),
-                },
-            ])
-        } finally {
-            setIsLoading(false)
+                }]
+            })
         }
     }
 
@@ -221,12 +321,15 @@ function App() {
                 onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
                 sidebarOpen={sidebarOpen}
             />
-
             <Sidebar
                 isOpen={sidebarOpen}
                 documents={documents}
                 onUpload={handleUpload}
-                onDeleteDocument={(id) => setDocuments(prev => prev.filter(d => d.id !== id))}
+                onDeleteDocument={(id) => {
+                    const doc = documents.find(d => d.id === id)
+                    if (doc) handleDeleteDocument(id, doc.name)
+                }}
+                onClearData={handleClearData}
             />
 
             <ChatArea

@@ -55,3 +55,39 @@ Provide a clear answer with references like:
         contents=prompt
     )
     return response.text
+
+def generate_answer_stream(query, text_contexts, image_contexts):
+    """Streaming version — yields text chunks as Gemini produces them."""
+    text_block = "\n\n".join(
+        [f"[Text Source {i+1}]\n{ctx['content']}"
+        for i, ctx in enumerate(text_contexts)]
+    )
+
+    image_block = "\n\n".join(
+        [f"[Image Source {i+1}] Page {ctx['page']} -> {ctx['image_path']}"
+         for i, ctx in enumerate(image_contexts)]
+    )
+
+    prompt = f"""
+You are an AI Knowledge assistant. Use ONLY the provided context to answer the question. If the answer is not in the context, say you don't know.
+Provide detailed, informative answers to the user to the best of your ability.
+
+TEXT CONTEXT:
+{text_block}
+
+IMAGE CONTEXT:
+{image_block}
+
+QUESTION:
+{query}
+
+Provide a clear answer with references like:
+(Text Source 1), (Image Source 2)
+"""
+    response = client.models.generate_content_stream(
+        model="gemini-2.5-flash",
+        contents=prompt,
+    )
+    for chunk in response:
+        if chunk.text:
+            yield chunk.text

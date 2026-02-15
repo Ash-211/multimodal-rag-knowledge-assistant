@@ -1,7 +1,9 @@
 import os
 import shutil
 import glob
+import json
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
+from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -12,11 +14,12 @@ from auth import get_password_hash, verify_password, create_access_token, get_cu
 # Import our RAG components
 # Ensure these imports match your actual file structure
 from ingest.pdf_ingest import ingest_pdf
+from ingest.audio_ingest import ingest_audio
 from vectorstore.document_index import DocumentIndex
 from vectorstore.chunk_index import ChunkIndex
 from vectorstore.image_store import ImageVectorStore
 from vectorstore.index_manager import IndexManager
-from rag.generator import generate_answer
+from rag.generator import generate_answer, generate_answer_stream
 from rag.reranker import rerank
 
 DB_PATH = "../data/users.db"
@@ -131,6 +134,15 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
 
     access_token = create_access_token(data={"sub": form_data.username})
     return {"access_token": access_token, "token_type": "bearer"}
+
+@app.post("/clear-data")
+async def logout_endpoint(username: str = Depends(get_current_user)):
+    """Clear all user-uploaded data (files, images, indices) on logout."""
+    user_dir = os.path.join(DATA_DIR, "users", username)
+    if os.path.exists(user_dir):
+        shutil.rmtree(user_dir)
+    return {"message": "User data cleared successfully"}
+
 @app.post("/ingest")
 async def ingest_endpoint(file: UploadFile = File(...),
                           username: str = Depends(get_current_user)
@@ -163,42 +175,75 @@ async def ingest_endpoint(file: UploadFile = File(...),
         shutil.copyfileobj(file.file, buffer)
         
     print(f"[{username}] Ingesting {filename}...")
-    text_chunks, _ = ingest_pdf(save_path, USER_PROCESSED_DIR)
     
-    # --- Index Text ---
-    from collections import defaultdict
-    chunks_by_source = defaultdict(list)
-    for chunk in text_chunks:
-        chunks_by_source[chunk["source"]].append(chunk["text"])
-    for source, chunks in chunks_by_source.items():
-        slide_chunks = []
-        full_text = ""
-        for text in chunks:
-            text = text.strip()
-            if len(text) > 50:
-                full_text += text + "\n"
-                slide_chunks.append(text)
-        
-        if slide_chunks:
-            user_doc_index.add_document(full_text, source)
-            user_chunk_index.add_chunks(source, slide_chunks)
+    # Determine file type and ingest accordingly
+    AUDIO_EXTENSIONS = {".mp3", ".wav", ".m4a", ".ogg", ".flac"}
+    file_ext = os.path.splitext(filename)[1].lower()
+    
+    text_chunks = []
+    new_images = []
+    
+    if file_ext in AUDIO_EXTENSIONS:
+        # --- Audio Ingestion ---
+        transcript = ingest_audio(save_path)
+        if transcript and len(transcript.strip()) > 50:
+            # Split transcript into ~500-char chunks for better retrieval
+            chunk_size = 500
+            words = transcript.split()
+            current_chunk = ""
+            audio_chunks = []
+            for word in words:
+                if len(current_chunk) + len(word) + 1 > chunk_size and current_chunk:
+                    audio_chunks.append(current_chunk.strip())
+                    current_chunk = word
+                else:
+                    current_chunk += " " + word
+            if current_chunk.strip():
+                audio_chunks.append(current_chunk.strip())
             
-    # --- Index Images ---
-    all_images = glob.glob(os.path.join(USER_PROCESSED_DIR, "*.png"))
-    pdf_basename = os.path.basename(save_path)
-    new_images = [img for img in all_images if pdf_basename in os.path.basename(img)]
-    
-    image_metadata = []
-    for p in new_images:
-        try:
-            parts = p.split("_page_")
-            page_num = int(parts[1].split("_img_")[0]) if len(parts) > 1 else 0
-        except:
-            page_num = 0
-        image_metadata.append({"image_path": p, "page": page_num})
+            source = filename
+            user_doc_index.add_document(transcript, source)
+            user_chunk_index.add_chunks(source, audio_chunks)
+            text_chunks = [{"source": source, "text": c} for c in audio_chunks]
+    else:
+        # --- PDF Ingestion ---
+        text_chunks, _ = ingest_pdf(save_path, USER_PROCESSED_DIR)
         
-    if new_images:
-        user_image_store.add_images(new_images, image_metadata)
+        # --- Index Text ---
+        from collections import defaultdict
+        chunks_by_source = defaultdict(list)
+        for chunk in text_chunks:
+            chunks_by_source[chunk["source"]].append(chunk["text"])
+        for source, chunks in chunks_by_source.items():
+            slide_chunks = []
+            full_text = ""
+            for text in chunks:
+                text = text.strip()
+                if len(text) > 50:
+                    full_text += text + "\n"
+                    slide_chunks.append(text)
+            
+            if slide_chunks:
+                user_doc_index.add_document(full_text, source)
+                user_chunk_index.add_chunks(source, slide_chunks)
+                
+        # --- Index Images ---
+        all_images = glob.glob(os.path.join(USER_PROCESSED_DIR, "*.png"))
+        pdf_basename = os.path.basename(save_path)
+        new_images = [img for img in all_images if pdf_basename in os.path.basename(img)]
+        
+        image_metadata = []
+        for p in new_images:
+            try:
+                parts = p.split("_page_")
+                page_num = int(parts[1].split("_img_")[0]) if len(parts) > 1 else 0
+            except:
+                page_num = 0
+            image_metadata.append({"image_path": p, "page": page_num})
+            
+        if new_images:
+            user_image_store.add_images(new_images, image_metadata)
+    
     # --- Save Updates ---
     user_chunk_index.save_local(USER_CHUNK_INDEX_PATH)
     user_doc_index.save_local(USER_DOC_INDEX_PATH)
@@ -286,3 +331,115 @@ async def chat_endpoint(
         "sources": ranked_chunks,
         "images": frontend_images
     }
+
+@app.post("/chat/stream")
+async def chat_stream_endpoint(
+    request: QueryRequest,
+    username: str = Depends(get_current_user)
+):
+    query = request.query
+    
+    # User-specific directories
+    USER_DIR = os.path.join(DATA_DIR, "users", username)
+    USER_INDICES_DIR = os.path.join(USER_DIR, "indices")
+    USER_PROCESSED_DIR = os.path.join(USER_DIR, "processed", "images")
+    
+    USER_CHUNK_INDEX_PATH = os.path.join(USER_INDICES_DIR, "chunks")
+    USER_DOC_INDEX_PATH = os.path.join(USER_INDICES_DIR, "docs")
+    USER_IMAGE_INDEX_PATH = os.path.join(USER_INDICES_DIR, "images")
+    
+    # Load user's indices
+    user_doc_index = DocumentIndex()
+    user_chunk_index = ChunkIndex()
+    user_image_store = ImageVectorStore()
+    
+    if not os.path.exists(USER_CHUNK_INDEX_PATH):
+        async def no_docs():
+            yield f"data: {json.dumps({'type': 'text', 'content': 'You haven\'t uploaded any documents yet. Please upload a PDF first.'})}\n\n"
+            yield f"data: {json.dumps({'type': 'done', 'sources': [], 'images': []})}\n\n"
+        return StreamingResponse(no_docs(), media_type="text/event-stream")
+    
+    user_chunk_index.load_local(USER_CHUNK_INDEX_PATH)
+    user_doc_index.load_local(USER_DOC_INDEX_PATH)
+    user_image_store.load_local(USER_IMAGE_INDEX_PATH)
+    
+    user_index_manager = IndexManager(user_doc_index, user_chunk_index)
+    
+    # 1. Retrieve Text
+    retrieved_chunks = user_index_manager.retrieve(query)
+    unique_chunks = []
+    seen = set()
+    for r in retrieved_chunks:
+        if r["content"] not in seen:
+            unique_chunks.append(r)
+            seen.add(r["content"])
+    
+    # 2. Rerank
+    ranked_chunks = rerank(query, unique_chunks, top_k=5)
+    
+    # 3. Retrieve Images
+    image_results = user_image_store.search(query, k=4)
+    
+    # 4. Format images for frontend
+    base_url = f"http://localhost:8000/images/{username}/"
+    frontend_images = []
+    for img in image_results:
+        fname = os.path.basename(img["image_path"])
+        frontend_images.append({
+            "url": base_url + fname,
+            "page": img.get("page", 0)
+        })
+    
+    # 5. Stream the answer
+    async def event_stream():
+        try:
+            for chunk in generate_answer_stream(query, ranked_chunks, image_results):
+                yield f"data: {json.dumps({'type': 'text', 'content': chunk})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'content': str(e)})}\n\n"
+        
+        # Send sources and images as the final event
+        yield f"data: {json.dumps({'type': 'done', 'sources': ranked_chunks, 'images': frontend_images})}\n\n"
+    
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+@app.get("/documents")
+def get_documents(username: str = Depends(get_current_user)):
+
+    user_raw_dir = os.path.join(DATA_DIR, "users", username, "raw")
+    if not os.path.exists(user_raw_dir):
+        return {'documents': []}
+    
+    documents = []
+    for filename in os.listdir(user_raw_dir):
+        filepath = os.path.join(user_raw_dir, filename)
+        if os.path.isfile(filepath):
+            documents.append({
+                "name" : filename,
+                "size" : os.path.getsize(filepath),
+                "uploaded_at" : os.path.getmtime(filepath)
+            })
+        
+    return {"documents": documents}
+
+
+
+@app.delete("/documents/{filename}")
+async def delete_document(filename: str, username: str = Depends(get_current_user)):
+    user_dir = os.path.join(DATA_DIR, "users", username)
+    user_raw_dir = os.path.join(user_dir, "raw")
+    file_path = os.path.join(user_raw_dir, filename)
+
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    os.remove(file_path)
+    
+    indices_dir = os.path.join(user_dir, "indices")
+    processed_dir = os.path.join(user_dir, "processed")
+    if os.path.exists(indices_dir):
+        shutil.rmtree(indices_dir)
+    if os.path.exists(processed_dir):
+        shutil.rmtree(processed_dir)
+
+    return {"message": f"Deleted {filename}"}

@@ -1,102 +1,200 @@
-.message-bubble {
-    display: flex;
-    gap: var(--space-3);
+/* =============================================
+   Canvas-style message layout (ChatGPT / Gemini)
+   ============================================= */
+
+/* --- Row container --- */
+.message-row {
     animation: fadeInUp var(--transition-slow) ease;
+    padding: var(--space-2) 0;
 }
 
-.message-bubble.user {
-    justify-content: flex-end;
+.message-row+.message-row {
+    border-top: 1px solid var(--border-subtle);
 }
 
-.message-bubble.error {
-    justify-content: flex-end;
-}
-
-/* Avatars */
-.assistant-avatar {
-    width: 36px;
-    height: 36px;
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--bg-glass);
-    border: 1px solid var(--border-subtle);
+/* Alternating background for assistant rows */
+.message-row.assistant {
+    background: var(--bg-secondary);
     border-radius: var(--radius-lg);
-    color: var(--accent-primary);
+    padding: var(--space-4) var(--space-3);
 }
 
-.user-avatar {
-    width: 36px;
-    height: 36px;
+.message-row.user {
+    padding: var(--space-4) var(--space-3);
+}
+
+.message-row.error {
+    padding: var(--space-4) var(--space-3);
+}
+
+/* --- Inner layout: icon + body --- */
+.message-inner {
+    display: flex;
+    gap: var(--space-4);
+    align-items: flex-start;
+    max-width: 100%;
+}
+
+/* --- Role Icon --- */
+.role-icon-wrapper {
     flex-shrink: 0;
+    padding-top: 2px;
+}
+
+.role-icon {
+    width: 30px;
+    height: 30px;
     display: flex;
     align-items: center;
     justify-content: center;
+    border-radius: var(--radius-md);
+}
+
+.role-icon.assistant-icon {
     background: var(--accent-gradient);
-    border-radius: var(--radius-lg);
     color: white;
 }
 
-.error-icon {
-    width: 36px;
-    height: 36px;
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+.role-icon.user-icon {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-medium);
+    color: var(--text-secondary);
+}
+
+.role-icon.error-icon {
     background: var(--error-bg);
     border: 1px solid rgba(239, 68, 68, 0.2);
-    border-radius: var(--radius-lg);
     color: var(--error);
 }
 
-/* Message Content */
-.message-content {
-    max-width: 75%;
+/* --- Message Body --- */
+.message-body {
+    flex: 1;
+    min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: var(--space-3);
+    gap: var(--space-4);
 }
 
-.message-bubble.user .message-content {
-    align-items: flex-end;
-}
-
+/* --- Text / Markdown --- */
 .message-text {
-    padding: var(--space-4);
-    border-radius: var(--radius-xl);
     font-size: var(--text-base);
-    line-height: 1.7;
-    white-space: pre-wrap;
+    line-height: 1.75;
+    color: var(--text-primary);
     word-break: break-word;
 }
 
-.message-bubble.assistant .message-text {
-    background: var(--bg-tertiary);
+/* Markdown typography inside assistant messages */
+.message-row.assistant .message-text p {
+    margin-bottom: 0.75em;
+}
+
+.message-row.assistant .message-text p:last-child {
+    margin-bottom: 0;
+}
+
+.message-row.assistant .message-text strong {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.message-row.assistant .message-text em {
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+.message-row.assistant .message-text h1,
+.message-row.assistant .message-text h2,
+.message-row.assistant .message-text h3,
+.message-row.assistant .message-text h4 {
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-top: 1.25em;
+    margin-bottom: 0.5em;
+}
+
+.message-row.assistant .message-text h1 {
+    font-size: 1.4em;
+}
+
+.message-row.assistant .message-text h2 {
+    font-size: 1.25em;
+}
+
+.message-row.assistant .message-text h3 {
+    font-size: 1.1em;
+}
+
+.message-row.assistant .message-text ul,
+.message-row.assistant .message-text ol {
+    padding-left: 1.5em;
+    margin-bottom: 0.75em;
+}
+
+.message-row.assistant .message-text li {
+    margin-bottom: 0.35em;
+}
+
+.message-row.assistant .message-text li::marker {
+    color: var(--accent-secondary);
+}
+
+.message-row.assistant .message-text code {
+    font-family: var(--font-mono);
+    font-size: 0.875em;
+    background: var(--bg-elevated);
+    padding: 0.15em 0.4em;
+    border-radius: var(--radius-sm);
+    color: var(--accent-tertiary);
+}
+
+.message-row.assistant .message-text pre {
+    background: var(--bg-primary);
     border: 1px solid var(--border-subtle);
-    border-top-left-radius: var(--radius-sm);
+    border-radius: var(--radius-md);
+    padding: var(--space-4);
+    overflow-x: auto;
+    margin-bottom: 0.75em;
 }
 
-.message-bubble.user .message-text {
-    background: var(--accent-gradient);
-    color: white;
-    border-top-right-radius: var(--radius-sm);
+.message-row.assistant .message-text pre code {
+    background: transparent;
+    padding: 0;
+    color: var(--text-primary);
 }
 
-.message-bubble.error .message-text {
-    background: var(--error-bg);
-    border: 1px solid rgba(239, 68, 68, 0.2);
+.message-row.assistant .message-text blockquote {
+    border-left: 3px solid var(--accent-primary);
+    padding-left: var(--space-4);
+    color: var(--text-secondary);
+    margin-bottom: 0.75em;
+}
+
+.message-row.assistant .message-text a {
+    color: var(--accent-secondary);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.message-row.assistant .message-text a:hover {
+    color: var(--accent-tertiary);
+}
+
+/* User message style — slightly dimmer */
+.message-row.user .message-text {
+    color: var(--text-primary);
+}
+
+/* Error message style */
+.message-row.error .message-text {
     color: var(--error);
-    border-top-right-radius: var(--radius-sm);
 }
 
-/* Images */
+/* --- Images --- */
 .message-images {
     display: flex;
     flex-wrap: wrap;
     gap: var(--space-2);
-    padding-left: var(--space-1);
 }
 
 .image-thumb {
@@ -134,9 +232,9 @@
     color: white;
 }
 
-/* Sources */
+/* --- Sources --- */
 .message-sources {
-    padding-left: var(--space-1);
+    margin-top: var(--space-1);
 }
 
 .sources-toggle {
@@ -229,14 +327,7 @@
     overflow: hidden;
 }
 
-/* Timestamp */
-.message-time {
-    font-size: var(--text-xs);
-    color: var(--text-tertiary);
-    padding: 0 var(--space-2);
-}
-
-/* Image Modal */
+/* --- Image Modal --- */
 .image-modal {
     position: fixed;
     inset: 0;
@@ -276,9 +367,10 @@
     font-size: var(--text-sm);
 }
 
+/* --- Responsive --- */
 @media (max-width: 768px) {
-    .message-content {
-        max-width: 85%;
+    .message-inner {
+        gap: var(--space-3);
     }
 
     .image-thumb {

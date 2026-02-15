@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react'
 import './Sidebar.css'
 
-function Sidebar({ isOpen, documents, onUpload, onDeleteDocument }) {
+function Sidebar({ isOpen, documents, onUpload, onDeleteDocument, onClearData }) {
     const [isDragging, setIsDragging] = useState(false)
     const [uploadProgress, setUploadProgress] = useState(null)
     const fileInputRef = useRef(null)
@@ -24,7 +24,9 @@ function Sidebar({ isOpen, documents, onUpload, onDeleteDocument }) {
         const validFiles = files.filter(f =>
             f.type === 'application/pdf' ||
             f.type === 'text/plain' ||
-            f.name.endsWith('.docx')
+            f.name.endsWith('.docx') ||
+            f.type.startsWith('audio/') ||
+            ['.mp3', '.wav', '.m4a', '.ogg', '.flac'].some(ext => f.name.endsWith(ext))
         )
 
         for (const file of validFiles) {
@@ -122,7 +124,7 @@ function Sidebar({ isOpen, documents, onUpload, onDeleteDocument }) {
                     <input
                         ref={fileInputRef}
                         type="file"
-                        accept=".pdf,.txt,.docx"
+                        accept=".pdf,.txt,.docx,.mp3,.wav,.m4a,.ogg,.flac"
                         multiple
                         onChange={handleFileSelect}
                         hidden
@@ -136,7 +138,7 @@ function Sidebar({ isOpen, documents, onUpload, onDeleteDocument }) {
                     <p className="upload-text">
                         {isDragging ? 'Drop files here' : 'Upload documents'}
                     </p>
-                    <p className="upload-hint">PDF, TXT, DOCX</p>
+                    <p className="upload-hint">PDF, TXT, DOCX, MP3, WAV, M4A</p>
                 </div>
 
                 {/* Upload Progress */}
@@ -186,6 +188,16 @@ function Sidebar({ isOpen, documents, onUpload, onDeleteDocument }) {
                             </div>
                         ))
                     )}
+                </div>
+
+                {/* Clear All Data */}
+                <div className="clear-data-section">
+                    <button className="btn btn-ghost btn-sm clear-data-btn" onClick={onClearData}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+                        </svg>
+                        Clear All Data
+                    </button>
                 </div>
             </div>
         </aside>
