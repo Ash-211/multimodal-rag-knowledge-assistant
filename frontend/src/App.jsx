@@ -14,33 +14,23 @@ function App() {
     const [token, setToken] = useState(() => localStorage.getItem('token'))
     const [user, setUser] = useState(null)
 
+    // Conversation state
+    const [conversations, setConversations] = useState([])
+    const [activeConversationId, setActiveConversationId] = useState(null)
+    const isFirstMessage = useRef(true)
+
     // Auth state
     const isAuthenticated = !!token
 
-    // Fetch documents on mount
+    // Fetch documents and conversations on auth
     useEffect(() => {
-
         if (isAuthenticated) {
             fetchDocuments()
-            // Load messages from localStorage if available
-            const saved = localStorage.getItem('chat_messages')
-            if (saved) {
-                try {
-                    setMessages(JSON.parse(saved))
-                } catch (e) {
-                    console.error('Failed to parse saved messages')
-                }
-            }
+            fetchConversations()
         }
     }, [isAuthenticated])
 
-    // Save messages to localStorage
-    useEffect(() => {
-        if (messages.length > 0) {
-            localStorage.setItem('chat_messages', JSON.stringify(messages))
-        }
-    }, [messages])
-
+    // --- Auth ---
     const handleLogin = async (username, password) => {
         try {
             setError(null)
@@ -62,19 +52,22 @@ function App() {
             localStorage.setItem('token', data.access_token)
             setToken(data.access_token)
             setUser(username)
+            // Start with a fresh chat on login
+            setMessages([])
+            setActiveConversationId(null)
         } catch (err) {
             setError(err.message)
             throw err
         }
     }
 
-    const handleRegister = async (username, password) => {
+    const handleRegister = async ({ username, password, first_name, last_name, email }) => {
         try {
             setError(null)
             const res = await fetch(`${API_BASE}/register`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username, password }),
+                body: JSON.stringify({ username, password, first_name, last_name, email }),
             })
 
             if (!res.ok) {
@@ -82,7 +75,6 @@ function App() {
                 throw new Error(data.detail || 'Registration failed')
             }
 
-            // Auto-login after registration
             await handleLogin(username, password)
         } catch (err) {
             setError(err.message)
@@ -92,88 +84,99 @@ function App() {
 
     const handleLogout = () => {
         localStorage.removeItem('token')
-        localStorage.removeItem('chat_messages')
         setToken(null)
         setUser(null)
         setMessages([])
         setDocuments([])
+        setConversations([])
+        setActiveConversationId(null)
     }
 
+    // --- Conversations ---
+    const fetchConversations = async () => {
+        try {
+            const res = await fetch(`${API_BASE}/conversations`, {
+                headers: { Authorization: `Bearer ${token}` },
+            })
+            if (res.ok) {
+                const data = await res.json()
+                setConversations(data.conversations)
+            }
+        } catch (err) {
+            console.error('Failed to fetch conversations:', err)
+        }
+    }
+
+    const handleNewChat = () => {
+        setActiveConversationId(null)
+        setMessages([])
+        isFirstMessage.current = true
+    }
+
+    const handleSelectConversation = async (convId) => {
+        if (convId === activeConversationId) return
+        setActiveConversationId(convId)
+        setMessages([])
+        isFirstMessage.current = false
+
+        try {
+            const res = await fetch(`${API_BASE}/conversations/${convId}/messages`, {
+                headers: { Authorization: `Bearer ${token}` },
+            })
+            if (res.ok) {
+                const data = await res.json()
+                setMessages(data.messages.map((msg, i) => ({
+                    id: Date.now() + i,
+                    ...msg,
+                })))
+            }
+        } catch (err) {
+            console.error('Failed to load conversation:', err)
+        }
+    }
+
+    const handleDeleteConversation = async (convId) => {
+        try {
+            await fetch(`${API_BASE}/conversations/${convId}`, {
+                method: 'DELETE',
+                headers: { Authorization: `Bearer ${token}` },
+            })
+            setConversations(prev => prev.filter(c => c.id !== convId))
+            if (activeConversationId === convId) {
+                handleNewChat()
+            }
+        } catch (err) {
+            console.error('Failed to delete conversation:', err)
+        }
+    }
+
+    // --- Data Management ---
     const handleClearData = async () => {
         if (!window.confirm('This will delete ALL of your documents and chat history. Are you sure? '))
             return
         try {
             await fetch(`${API_BASE}/clear-data`, {
                 method: 'POST',
-                headers: {
-                    Authorization: `Bearer ${token}`
-                },
+                headers: { Authorization: `Bearer ${token}` },
+            })
+            await fetch(`${API_BASE}/chat/history`, {
+                method: 'DELETE',
+                headers: { Authorization: `Bearer ${token}` },
             })
         } catch (err) {
             console.error('Failed to clear data:', err)
         }
         setMessages([])
         setDocuments([])
-        localStorage.removeItem('chat_messages')
+        setConversations([])
+        setActiveConversationId(null)
     }
 
-    const handleUpload = async (file) => {
-        try {
-            setError(null)
-            const formData = new FormData()
-            formData.append('file', file)
-
-            // Add optimistic document
-            const tempDoc = {
-                id: Date.now(),
-                name: file.name,
-                status: 'uploading',
-                progress: 0,
-            }
-            setDocuments(prev => [...prev, tempDoc])
-
-            const res = await fetch(`${API_BASE}/ingest`, {
-                method: 'POST',
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                },
-                body: formData,
-            })
-
-            if (!res.ok) {
-                throw new Error('Upload failed')
-            }
-
-            const data = await res.json()
-
-            // Update document status
-            setDocuments(prev =>
-                prev.map(doc =>
-                    doc.id === tempDoc.id
-                        ? { ...doc, status: 'ready', chunks: data.chunks, images: data.images }
-                        : doc
-                )
-            )
-            await fetchDocuments()
-
-            return data
-        } catch (err) {
-            setError(err.message)
-            // Update document status to error
-            setDocuments(prev =>
-                prev.map(doc =>
-                    doc.status === 'uploading' ? { ...doc, status: 'error' } : doc
-                )
-            )
-            throw err
-        }
-    }
+    // --- Documents ---
     const fetchDocuments = async () => {
         try {
             const res = await fetch(`${API_BASE}/documents`, {
-                headers: {
-                    Authorization: `Bearer ${token}`
-                },
+                headers: { Authorization: `Bearer ${token}` },
             })
             if (res.ok) {
                 const data = await res.json()
@@ -188,6 +191,50 @@ function App() {
             console.error('Failed to fetch documents:', err)
         }
     }
+
+    const handleUpload = async (file) => {
+        try {
+            setError(null)
+            const formData = new FormData()
+            formData.append('file', file)
+
+            const tempDoc = {
+                id: Date.now(),
+                name: file.name,
+                status: 'uploading',
+                progress: 0,
+            }
+            setDocuments(prev => [...prev, tempDoc])
+
+            const res = await fetch(`${API_BASE}/ingest`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}` },
+                body: formData,
+            })
+
+            if (!res.ok) throw new Error('Upload failed')
+
+            const data = await res.json()
+            setDocuments(prev =>
+                prev.map(doc =>
+                    doc.id === tempDoc.id
+                        ? { ...doc, status: 'ready', chunks: data.chunks, images: data.images }
+                        : doc
+                )
+            )
+            await fetchDocuments()
+            return data
+        } catch (err) {
+            setError(err.message)
+            setDocuments(prev =>
+                prev.map(doc =>
+                    doc.status === 'uploading' ? { ...doc, status: 'error' } : doc
+                )
+            )
+            throw err
+        }
+    }
+
     const handleDeleteDocument = async (docId, docName) => {
         try {
             const res = await fetch(`${API_BASE}/documents/${encodeURIComponent(docName)}`, {
@@ -197,13 +244,38 @@ function App() {
             if (res.ok) {
                 setDocuments(prev => prev.filter(d => d.id !== docId))
             }
-        }
-        catch (err) {
+        } catch (err) {
             console.error('Failed to delete document: ', err)
         }
     }
+
+    // --- Chat ---
     const handleSendMessage = async (content) => {
         if (!content.trim() || isLoading) return
+
+        // If no active conversation, create one first
+        let convId = activeConversationId
+        let isNew = false
+        if (!convId) {
+            try {
+                const res = await fetch(`${API_BASE}/conversations`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: `Bearer ${token}`,
+                    },
+                })
+                const data = await res.json()
+                convId = data.id
+                setActiveConversationId(convId)
+                setConversations(prev => [data, ...prev])
+                isNew = true
+                isFirstMessage.current = true
+            } catch (err) {
+                console.error('Failed to create conversation:', err)
+                return
+            }
+        }
 
         const userMessage = {
             id: Date.now(),
@@ -218,6 +290,16 @@ function App() {
         setIsLoading(true)
         setError(null)
 
+        // Save user message to backend (await to ensure it's in DB)
+        await fetch(`${API_BASE}/chat/history`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ ...userMessage, conversation_id: convId }),
+        })
+
         try {
             const res = await fetch(`${API_BASE}/chat/stream`, {
                 method: 'POST',
@@ -228,9 +310,7 @@ function App() {
                 body: JSON.stringify({ query: content.trim() }),
             })
 
-            if (!res.ok) {
-                throw new Error('Failed to get response')
-            }
+            if (!res.ok) throw new Error('Failed to get response')
 
             // Response arrived — replace typing indicator with the streaming message
             setIsLoading(false)
@@ -246,6 +326,9 @@ function App() {
             const reader = res.body.getReader()
             const decoder = new TextDecoder()
             let buffer = ''
+            let accumulatedContent = ''
+            let finalSources = []
+            let finalImages = []
 
             while (true) {
                 const { done, value } = await reader.read()
@@ -253,9 +336,8 @@ function App() {
 
                 buffer += decoder.decode(value, { stream: true })
 
-                // Parse SSE lines from buffer
                 const lines = buffer.split('\n')
-                buffer = lines.pop() // Keep incomplete line in buffer
+                buffer = lines.pop()
 
                 for (const line of lines) {
                     if (!line.startsWith('data: ')) continue
@@ -264,20 +346,22 @@ function App() {
                         const event = JSON.parse(line.slice(6))
 
                         if (event.type === 'text') {
-                            // Append text chunk to the assistant message
+                            accumulatedContent += event.content
                             setMessages(prev => prev.map(msg =>
                                 msg.id === aiMessageId
                                     ? { ...msg, content: msg.content + event.content }
                                     : msg
                             ))
                         } else if (event.type === 'done') {
-                            // Attach sources and images
+                            finalSources = event.sources || []
+                            finalImages = event.images || []
                             setMessages(prev => prev.map(msg =>
                                 msg.id === aiMessageId
-                                    ? { ...msg, sources: event.sources || [], images: event.images || [] }
+                                    ? { ...msg, sources: finalSources, images: finalImages }
                                     : msg
                             ))
                         } else if (event.type === 'error') {
+                            accumulatedContent += '\n\nError: ' + event.content
                             setMessages(prev => prev.map(msg =>
                                 msg.id === aiMessageId
                                     ? { ...msg, content: msg.content + '\n\nError: ' + event.content }
@@ -289,11 +373,45 @@ function App() {
                     }
                 }
             }
+            // Save the final assistant message to backend using local variables
+            if (accumulatedContent) {
+                fetch(`${API_BASE}/chat/history`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: `Bearer ${token}`,
+                    },
+                    body: JSON.stringify({
+                        conversation_id: convId,
+                        role: 'assistant',
+                        content: accumulatedContent,
+                        sources: finalSources,
+                        images: finalImages,
+                        timestamp: new Date().toISOString(),
+                    }),
+                })
+            }
+
+            // Generate title for new conversations
+            if (isFirstMessage.current) {
+                isFirstMessage.current = false
+                fetch(`${API_BASE}/conversations/${convId}/generate-title`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: `Bearer ${token}`,
+                    },
+                    body: JSON.stringify({ message: content.trim() }),
+                }).then(res => res.json()).then(data => {
+                    setConversations(prev => prev.map(c =>
+                        c.id === convId ? { ...c, title: data.title } : c
+                    ))
+                }).catch(() => { })
+            }
         } catch (err) {
             setError(err.message)
             setIsLoading(false)
             setMessages(prev => {
-                // Remove empty assistant message and add error
                 const filtered = prev.filter(m => m.id !== aiMessageId || m.content)
                 return [...filtered, {
                     id: Date.now() + 2,
@@ -306,8 +424,7 @@ function App() {
     }
 
     const clearChat = () => {
-        setMessages([])
-        localStorage.removeItem('chat_messages')
+        handleNewChat()
     }
 
     return (
@@ -323,12 +440,18 @@ function App() {
             />
             <Sidebar
                 isOpen={sidebarOpen}
+                isAuthenticated={isAuthenticated}
                 documents={documents}
+                conversations={conversations}
+                activeConversationId={activeConversationId}
                 onUpload={handleUpload}
                 onDeleteDocument={(id) => {
                     const doc = documents.find(d => d.id === id)
                     if (doc) handleDeleteDocument(id, doc.name)
                 }}
+                onNewChat={handleNewChat}
+                onSelectConversation={handleSelectConversation}
+                onDeleteConversation={handleDeleteConversation}
                 onClearData={handleClearData}
             />
 

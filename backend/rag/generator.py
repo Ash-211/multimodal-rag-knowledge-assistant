@@ -4,6 +4,17 @@ import google.genai as genai
 load_dotenv()
 
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+
+def generate_title(user_message):
+    """Generate a short title for a conversation based on the first user message."""
+    prompt = f"Generate a concise 3-6 word title for a conversation that starts with this message. Return ONLY the title, no quotes or punctuation.\n\nMessage: {user_message}\n\nTitle:"
+    try:
+        response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
+        return response.text.strip().strip('"').strip("'")[:50]
+    except Exception:
+        return "New Chat"
+
+
 def decompose_query(user_query):
     prompt = f"""
 Break the following user question into smaller, independent search queries.
@@ -71,6 +82,7 @@ def generate_answer_stream(query, text_contexts, image_contexts):
     prompt = f"""
 You are an AI Knowledge assistant. Use ONLY the provided context to answer the question. If the answer is not in the context, say you don't know.
 Provide detailed, informative answers to the user to the best of your ability.
+Prioritize satisfying the user's query, even if you have to take a little liberty with the context.
 
 TEXT CONTEXT:
 {text_block}

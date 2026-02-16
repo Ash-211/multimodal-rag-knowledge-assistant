@@ -14,6 +14,9 @@ function TopNav({
     const [authMode, setAuthMode] = useState('login')
     const [username, setUsername] = useState('')
     const [password, setPassword] = useState('')
+    const [firstName, setFirstName] = useState('')
+    const [lastName, setLastName] = useState('')
+    const [email, setEmail] = useState('')
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState('')
 
@@ -26,11 +29,14 @@ function TopNav({
             if (authMode === 'login') {
                 await onLogin(username, password)
             } else {
-                await onRegister(username, password)
+                await onRegister({ username, password, first_name: firstName, last_name: lastName, email })
             }
             setShowAuthModal(false)
             setUsername('')
             setPassword('')
+            setFirstName('')
+            setLastName('')
+            setEmail('')
         } catch (err) {
             setError(err.message)
         } finally {
@@ -154,6 +160,50 @@ function TopNav({
                                     autoComplete={authMode === 'login' ? 'current-password' : 'new-password'}
                                 />
                             </div>
+
+                            {authMode === 'register' && (
+                                <>
+                                    <div className="form-row">
+                                        <div className="form-group">
+                                            <label htmlFor="firstName">First Name</label>
+                                            <input
+                                                id="firstName"
+                                                type="text"
+                                                className="input"
+                                                value={firstName}
+                                                onChange={e => setFirstName(e.target.value)}
+                                                placeholder="First name"
+                                                required
+                                            />
+                                        </div>
+                                        <div className="form-group">
+                                            <label htmlFor="lastName">Last Name</label>
+                                            <input
+                                                id="lastName"
+                                                type="text"
+                                                className="input"
+                                                value={lastName}
+                                                onChange={e => setLastName(e.target.value)}
+                                                placeholder="Last name"
+                                                required
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="form-group">
+                                        <label htmlFor="email">Email</label>
+                                        <input
+                                            id="email"
+                                            type="email"
+                                            className="input"
+                                            value={email}
+                                            onChange={e => setEmail(e.target.value)}
+                                            placeholder="you@example.com"
+                                            required
+                                        />
+                                    </div>
+                                </>
+                            )}
 
                             <button
                                 type="submit"

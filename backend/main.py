@@ -2,6 +2,8 @@ import os
 import shutil
 import glob
 import json
+import uuid
+from datetime import datetime
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -19,7 +21,7 @@ from vectorstore.document_index import DocumentIndex
 from vectorstore.chunk_index import ChunkIndex
 from vectorstore.image_store import ImageVectorStore
 from vectorstore.index_manager import IndexManager
-from rag.generator import generate_answer, generate_answer_stream
+from rag.generator import generate_answer, generate_answer_stream, generate_title
 from rag.reranker import rerank
 
 DB_PATH = "../data/users.db"
@@ -31,9 +33,47 @@ def init_db():
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS users(
         username TEXT PRIMARY KEY,
-        hashed_password TEXT NOT NULL
+        hashed_password TEXT NOT NULL,
+        first_name TEXT DEFAULT '',
+        last_name TEXT DEFAULT '',
+        email TEXT DEFAULT ''
         )
         """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS conversations(
+        id TEXT PRIMARY KEY,
+        username TEXT NOT NULL,
+        title TEXT DEFAULT 'New Chat',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY (username) REFERENCES users(username)
+        )
+        """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS chat_messages(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        conversation_id TEXT NOT NULL,
+        username TEXT NOT NULL,
+        role TEXT NOT NULL,
+        content TEXT NOT NULL,
+        sources TEXT DEFAULT '[]',
+        images TEXT DEFAULT '[]',
+        timestamp TEXT NOT NULL,
+        FOREIGN KEY (username) REFERENCES users(username),
+        FOREIGN KEY (conversation_id) REFERENCES conversations(id)
+        )
+        """)
+    # Migrate existing DBs that don't have the new columns
+    for col in ['first_name', 'last_name', 'email']:
+        try:
+            cursor.execute(f"ALTER TABLE users ADD COLUMN {col} TEXT DEFAULT ''")
+        except sqlite3.OperationalError:
+            pass
+    # Migrate chat_messages to have conversation_id
+    try:
+        cursor.execute("ALTER TABLE chat_messages ADD COLUMN conversation_id TEXT DEFAULT ''")
+    except sqlite3.OperationalError:
+        pass
     conn.commit()
     conn.close()
 # --- Paths ---
@@ -104,6 +144,9 @@ def health_check():
 class UserRegister(BaseModel):
     username: str
     password: str
+    first_name: str = ''
+    last_name: str = ''
+    email: str = ''
 
 @app.post("/register")
 async def register(user: UserRegister):
@@ -115,7 +158,10 @@ async def register(user: UserRegister):
         raise HTTPException(status_code=400, detail="Username already exists")
 
     hashed = get_password_hash(user.password)
-    cursor.execute("INSERT INTO users (username, hashed_password) VALUES (?, ?)", (user.username, hashed))
+    cursor.execute(
+        "INSERT INTO users (username, hashed_password, first_name, last_name, email) VALUES (?, ?, ?, ?, ?)",
+        (user.username, hashed, user.first_name, user.last_name, user.email)
+    )
     conn.commit()
     conn.close()
     return {"message": "User registered!"}
@@ -443,3 +489,122 @@ async def delete_document(filename: str, username: str = Depends(get_current_use
         shutil.rmtree(processed_dir)
 
     return {"message": f"Deleted {filename}"}
+
+# --- Conversation Management ---
+
+@app.get("/conversations")
+async def list_conversations(username: str = Depends(get_current_user)):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT id, title, created_at, updated_at FROM conversations WHERE username = ? ORDER BY updated_at DESC",
+        (username,)
+    )
+    rows = cursor.fetchall()
+    conn.close()
+    return {"conversations": [
+        {"id": r[0], "title": r[1], "created_at": r[2], "updated_at": r[3]}
+        for r in rows
+    ]}
+
+@app.post("/conversations")
+async def create_conversation(username: str = Depends(get_current_user)):
+    conv_id = str(uuid.uuid4())
+    now = datetime.utcnow().isoformat() + "Z"
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO conversations (id, username, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+        (conv_id, username, "New Chat", now, now)
+    )
+    conn.commit()
+    conn.close()
+    return {"id": conv_id, "title": "New Chat", "created_at": now, "updated_at": now}
+
+@app.delete("/conversations/{conv_id}")
+async def delete_conversation(conv_id: str, username: str = Depends(get_current_user)):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM chat_messages WHERE conversation_id = ? AND username = ?", (conv_id, username))
+    cursor.execute("DELETE FROM conversations WHERE id = ? AND username = ?", (conv_id, username))
+    conn.commit()
+    conn.close()
+    return {"message": "Conversation deleted"}
+
+@app.get("/conversations/{conv_id}/messages")
+async def get_conversation_messages(conv_id: str, username: str = Depends(get_current_user)):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT role, content, sources, images, timestamp FROM chat_messages WHERE conversation_id = ? AND username = ? ORDER BY id ASC",
+        (conv_id, username)
+    )
+    rows = cursor.fetchall()
+    conn.close()
+    return {"messages": [
+        {"role": r[0], "content": r[1], "sources": json.loads(r[2]), "images": json.loads(r[3]), "timestamp": r[4]}
+        for r in rows
+    ]}
+
+class ChatMessage(BaseModel):
+    conversation_id: str
+    role: str
+    content: str
+    sources: list = []
+    images: list = []
+    timestamp: str
+
+@app.post("/chat/history")
+async def save_chat_message(message: ChatMessage, username: str = Depends(get_current_user)):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO chat_messages (conversation_id, username, role, content, sources, images, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (message.conversation_id, username, message.role, message.content, json.dumps(message.sources), json.dumps(message.images), message.timestamp)
+    )
+    # Update conversation's updated_at
+    cursor.execute(
+        "UPDATE conversations SET updated_at = ? WHERE id = ?",
+        (message.timestamp, message.conversation_id)
+    )
+    conn.commit()
+    conn.close()
+    return {"message": "Saved"}
+
+@app.post("/conversations/{conv_id}/generate-title")
+async def generate_conversation_title(conv_id: str, request: dict = None, username: str = Depends(get_current_user)):
+    # Get the message text from request body, or fall back to DB query
+    message_text = None
+    if request and "message" in request:
+        message_text = request["message"]
+    
+    if not message_text:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT content FROM chat_messages WHERE conversation_id = ? AND username = ? AND role = 'user' ORDER BY id ASC LIMIT 1",
+            (conv_id, username)
+        )
+        row = cursor.fetchone()
+        conn.close()
+        if not row:
+            return {"title": "New Chat"}
+        message_text = row[0]
+    
+    title = generate_title(message_text)
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("UPDATE conversations SET title = ? WHERE id = ? AND username = ?", (title, conv_id, username))
+    conn.commit()
+    conn.close()
+    return {"title": title}
+
+@app.delete("/chat/history")
+async def clear_all_chat_history(username: str = Depends(get_current_user)):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM chat_messages WHERE username = ?", (username,))
+    cursor.execute("DELETE FROM conversations WHERE username = ?", (username,))
+    conn.commit()
+    conn.close()
+    return {"message": "All chat history cleared"}
