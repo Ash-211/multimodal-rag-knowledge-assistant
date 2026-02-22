@@ -15,7 +15,7 @@ def _get_groq_client():
         _groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
     return _groq_client
 
-GROQ_MODEL = "llama-3.1-70b-versatile"
+GROQ_MODEL = "llama-3.3-70b-versatile"
 
 
 def _build_prompt(query, text_contexts, image_contexts):
