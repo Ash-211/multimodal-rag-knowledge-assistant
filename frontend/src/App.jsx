@@ -209,7 +209,12 @@ function App() {
             const res = await fetch(`${API_BASE}/ingest`, {
                 method: 'POST',
                 headers: { Authorization: `Bearer ${token}` },
-                body: formData,
+                body: (() => {
+                    if (activeConversationId) {
+                        formData.append('conversation_id', activeConversationId)
+                    }
+                    return formData
+                })(),
             })
 
             if (!res.ok) throw new Error('Upload failed')
@@ -307,7 +312,7 @@ function App() {
                     'Content-Type': 'application/json',
                     Authorization: `Bearer ${token}`,
                 },
-                body: JSON.stringify({ query: content.trim() }),
+                body: JSON.stringify({ query: content.trim(), conversation_id: convId }),
             })
 
             if (!res.ok) throw new Error('Failed to get response')

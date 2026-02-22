@@ -63,6 +63,16 @@ def init_db():
         FOREIGN KEY (conversation_id) REFERENCES conversations(id)
         )
         """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS conversation_documents(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        conversation_id TEXT NOT NULL,
+        filename TEXT NOT NULL,
+        username TEXT NOT NULL,
+        FOREIGN KEY (conversation_id) REFERENCES conversations(id),
+        FOREIGN KEY (username) REFERENCES users(username)
+        )
+        """)
     # Migrate existing DBs that don't have the new columns
     for col in ['first_name', 'last_name', 'email']:
         try:
@@ -198,6 +208,7 @@ async def logout_endpoint(username: str = Depends(get_current_user)):
 
 @app.post("/ingest")
 async def ingest_endpoint(file: UploadFile = File(...),
+                          conversation_id: str = Form(None),
                           username: str = Depends(get_current_user)
                           ):
     USER_DIR = os.path.join(DATA_DIR, "users", username)
@@ -302,6 +313,17 @@ async def ingest_endpoint(file: UploadFile = File(...),
     user_doc_index.save_local(USER_DOC_INDEX_PATH)
     user_image_store.save_local(USER_IMAGE_INDEX_PATH)
     
+    # Associate document with conversation if conversation_id provided
+    if conversation_id:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO conversation_documents (conversation_id, filename, username) VALUES (?, ?, ?)",
+            (conversation_id, filename, username)
+        )
+        conn.commit()
+        conn.close()
+
     return {
         "message": f"Successfully ingested {filename}", 
         "chunks": len(text_chunks), 
@@ -310,6 +332,7 @@ async def ingest_endpoint(file: UploadFile = File(...),
 
 class QueryRequest(BaseModel):
     query: str
+    conversation_id: str = None
 
 @app.post("/chat")
 async def chat_endpoint(
@@ -391,6 +414,7 @@ async def chat_stream_endpoint(
     username: str = Depends(get_current_user)
 ):
     query = request.query
+    conversation_id = request.conversation_id
     
     # User-specific directories
     USER_DIR = os.path.join(DATA_DIR, "users", username)
@@ -418,10 +442,24 @@ async def chat_stream_endpoint(
     user_doc_index.load_local(USER_DOC_INDEX_PATH)
     user_image_store.load_local(USER_IMAGE_INDEX_PATH)
     
+    # Look up documents associated with this conversation
+    conv_doc_filenames = None  # None means no filtering (search all)
+    if conversation_id:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT filename FROM conversation_documents WHERE conversation_id = ? AND username = ?",
+            (conversation_id, username)
+        )
+        rows = cursor.fetchall()
+        conn.close()
+        if rows:
+            conv_doc_filenames = {row[0] for row in rows}
+    
     user_index_manager = IndexManager(user_doc_index, user_chunk_index)
     
-    # 1. Retrieve Text
-    retrieved_chunks = user_index_manager.retrieve(query)
+    # 1. Retrieve Text (filtered to conversation's documents if available)
+    retrieved_chunks = user_index_manager.retrieve(query, source_filter=conv_doc_filenames)
     unique_chunks = []
     seen = set()
     for r in retrieved_chunks:

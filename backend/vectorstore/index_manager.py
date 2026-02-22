@@ -3,24 +3,32 @@ class IndexManager:
         self.doc_index = doc_index
         self.chunk_index = chunk_index
 
-    def retrieve(self, query, k=10):
+    def retrieve(self, query, k=10, source_filter=None):
         """
-        Two-stage retrieval:
-        1. Find the most relevant DOCUMENTS via doc_index
-        2. Search all chunks, but boost chunks from relevant documents
+        Retrieve relevant chunks for a query.
+        
+        Args:
+            query: The search query
+            k: Number of results to return
+            source_filter: Optional set of filenames to restrict search to.
+                          If provided, only chunks from these sources are returned.
+                          If None, all chunks are searched (backward compatible).
         """
-        # Stage 1: Find relevant documents
+        # Get chunks from the global chunk index (fetch extra for filtering)
+        all_chunks = self.chunk_index.search(query, k=k * 3)
+
+        if source_filter:
+            # Filter to only chunks from the specified documents
+            filtered = [c for c in all_chunks if c["source"] in source_filter]
+            return filtered[:k]
+        
+        # No filter — use two-stage doc-aware retrieval
         relevant_docs = self.doc_index.search(query, k=3)
         relevant_sources = {doc["source"] for doc in relevant_docs}
 
-        # Stage 2: Get chunks from the global chunk index
-        all_chunks = self.chunk_index.search(query, k=k * 2)  # fetch extra
-
-        # Separate into relevant-doc chunks and other chunks
         boosted = [c for c in all_chunks if c["source"] in relevant_sources]
         others = [c for c in all_chunks if c["source"] not in relevant_sources]
 
-        # Prioritize chunks from relevant documents, fill remaining with others
         result = boosted[:k]
         remaining = k - len(result)
         if remaining > 0:
