@@ -35,6 +35,8 @@ openai-whisper
 # Google Generative AI
 google-genai
 
+# Groq (fallback LLM)
+groq
 # Utilities
 numpy
 pydantic
