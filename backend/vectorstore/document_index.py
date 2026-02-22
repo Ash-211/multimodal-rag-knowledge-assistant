@@ -1,14 +1,20 @@
 import faiss
 import numpy as np
-from sentence_transformers import SentenceTransformer
 import os
 import pickle
 
 class DocumentIndex:
     def __init__(self):
-        self.model = SentenceTransformer("all-MiniLM-L6-v2")
+        self._model = None
         self.index = faiss.IndexFlatIP(384)
         self.metadata = []
+
+    @property
+    def model(self):
+        if self._model is None:
+            from sentence_transformers import SentenceTransformer
+            self._model = SentenceTransformer("all-MiniLM-L6-v2")
+        return self._model
 
     def add_document(self, full_text, source):
         embedding = self.model.encode([full_text])

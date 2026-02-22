@@ -150,6 +150,13 @@ class UserRegister(BaseModel):
 
 @app.post("/register")
 async def register(user: UserRegister):
+    # Validate email format
+    if user.email:
+        import re
+        email_pattern = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
+        if not email_pattern.match(user.email):
+            raise HTTPException(status_code=400, detail="Invalid email address")
+
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
@@ -481,14 +488,94 @@ async def delete_document(filename: str, username: str = Depends(get_current_use
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="File not found")
     
+    # Remove the target file
     os.remove(file_path)
     
+    # Wipe old indices and processed images
     indices_dir = os.path.join(user_dir, "indices")
     processed_dir = os.path.join(user_dir, "processed")
     if os.path.exists(indices_dir):
         shutil.rmtree(indices_dir)
     if os.path.exists(processed_dir):
         shutil.rmtree(processed_dir)
+
+    # Rebuild indices from remaining files
+    remaining_files = []
+    if os.path.exists(user_raw_dir):
+        remaining_files = [f for f in os.listdir(user_raw_dir) if os.path.isfile(os.path.join(user_raw_dir, f))]
+
+    if remaining_files:
+        USER_PROCESSED_DIR = os.path.join(user_dir, "processed", "images")
+        USER_INDICES_DIR = os.path.join(user_dir, "indices")
+        USER_CHUNK_INDEX_PATH = os.path.join(USER_INDICES_DIR, "chunks")
+        USER_DOC_INDEX_PATH = os.path.join(USER_INDICES_DIR, "docs")
+        USER_IMAGE_INDEX_PATH = os.path.join(USER_INDICES_DIR, "images")
+
+        rebuild_chunk_index = ChunkIndex()
+        rebuild_doc_index = DocumentIndex()
+        rebuild_image_store = ImageVectorStore()
+
+        AUDIO_EXTENSIONS = {".mp3", ".wav", ".m4a", ".ogg", ".flac"}
+
+        for remaining_file in remaining_files:
+            remaining_path = os.path.join(user_raw_dir, remaining_file)
+            file_ext = os.path.splitext(remaining_file)[1].lower()
+
+            try:
+                if file_ext in AUDIO_EXTENSIONS:
+                    transcript = ingest_audio(remaining_path)
+                    if transcript and len(transcript.strip()) > 50:
+                        chunk_size = 500
+                        words = transcript.split()
+                        current_chunk = ""
+                        audio_chunks = []
+                        for word in words:
+                            if len(current_chunk) + len(word) + 1 > chunk_size and current_chunk:
+                                audio_chunks.append(current_chunk.strip())
+                                current_chunk = word
+                            else:
+                                current_chunk += " " + word
+                        if current_chunk.strip():
+                            audio_chunks.append(current_chunk.strip())
+                        rebuild_doc_index.add_document(transcript, remaining_file)
+                        rebuild_chunk_index.add_chunks(remaining_file, audio_chunks)
+                else:
+                    text_chunks, _ = ingest_pdf(remaining_path, USER_PROCESSED_DIR)
+                    from collections import defaultdict
+                    chunks_by_source = defaultdict(list)
+                    for chunk in text_chunks:
+                        chunks_by_source[chunk["source"]].append(chunk["text"])
+                    for source, chunks in chunks_by_source.items():
+                        slide_chunks = []
+                        full_text = ""
+                        for text in chunks:
+                            text = text.strip()
+                            if len(text) > 50:
+                                full_text += text + "\n"
+                                slide_chunks.append(text)
+                        if slide_chunks:
+                            rebuild_doc_index.add_document(full_text, source)
+                            rebuild_chunk_index.add_chunks(source, slide_chunks)
+
+                    all_images = glob.glob(os.path.join(USER_PROCESSED_DIR, "*.png"))
+                    pdf_basename = os.path.basename(remaining_path)
+                    new_images = [img for img in all_images if pdf_basename in os.path.basename(img)]
+                    image_metadata = []
+                    for p in new_images:
+                        try:
+                            parts = p.split("_page_")
+                            page_num = int(parts[1].split("_img_")[0]) if len(parts) > 1 else 0
+                        except:
+                            page_num = 0
+                        image_metadata.append({"image_path": p, "page": page_num})
+                    if new_images:
+                        rebuild_image_store.add_images(new_images, image_metadata)
+            except Exception as e:
+                print(f"[{username}] Warning: failed to re-index {remaining_file}: {e}")
+
+        rebuild_chunk_index.save_local(USER_CHUNK_INDEX_PATH)
+        rebuild_doc_index.save_local(USER_DOC_INDEX_PATH)
+        rebuild_image_store.save_local(USER_IMAGE_INDEX_PATH)
 
     return {"message": f"Deleted {filename}"}
 
