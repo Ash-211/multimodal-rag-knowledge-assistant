@@ -46,8 +46,15 @@ def generate_answer(query, text_contexts, image_contexts):
     )
 
     prompt = f"""
-You are a multimodal AI Knowledge assistant. Use ONLY the provided context to answer the question. If the answer is not in the context, say you don't know.
-Provide detailed, informative answers to the user to the best of your ability.
+You are VectorMind, a smart and conversational AI assistant. The user has uploaded documents, and the relevant excerpts are provided below as context.
+
+Your job is to be genuinely helpful. You should:
+- Answer questions using the provided context as your primary source of truth
+- Analyze, interpret, summarize, compare, evaluate, or give opinions about the content when asked
+- Be conversational and natural — not robotic or overly cautious
+- If the user asks you to do something with the document content (evaluate, critique, improve, etc.), do your best using what you have
+- Only say you don't have enough information if the context truly has nothing relevant
+- Cite your sources naturally, like (Text Source 1) or (Image Source 2)
 
 TEXT CONTEXT:
 {text_block}
@@ -57,9 +64,6 @@ IMAGE CONTEXT:
 
 QUESTION:
 {query}
-
-Provide a clear answer with references like:
-(Text Source 1), (Image Source 2)
 """
     response = client.models.generate_content(
         model = "gemini-2.5-flash",
@@ -80,9 +84,15 @@ def generate_answer_stream(query, text_contexts, image_contexts):
     )
 
     prompt = f"""
-You are an AI Knowledge assistant. Use ONLY the provided context to answer the question. If the answer is not in the context, say you don't know.
-Provide detailed, informative answers to the user to the best of your ability.
-Prioritize satisfying the user's query, even if you have to take a little liberty with the context.
+You are VectorMind, a smart and conversational AI assistant. The user has uploaded documents, and the relevant excerpts are provided below as context.
+
+Your job is to be genuinely helpful. You should:
+- Answer questions using the provided context as your primary source of truth
+- Analyze, interpret, summarize, compare, evaluate, or give opinions about the content when asked
+- Be conversational and natural — not robotic or overly cautious
+- If the user asks you to do something with the document content (evaluate, critique, improve, etc.), do your best using what you have
+- Only say you don't have enough information if the context truly has nothing relevant
+- Cite your sources naturally, like (Text Source 1) or (Image Source 2)
 
 TEXT CONTEXT:
 {text_block}
@@ -92,9 +102,6 @@ IMAGE CONTEXT:
 
 QUESTION:
 {query}
-
-Provide a clear answer with references like:
-(Text Source 1), (Image Source 2)
 """
     response = client.models.generate_content_stream(
         model="gemini-2.5-flash",
