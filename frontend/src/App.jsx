@@ -198,6 +198,31 @@ function App() {
             const formData = new FormData()
             formData.append('file', file)
 
+            // Create a conversation if one doesn't exist yet
+            let convId = activeConversationId
+            if (!convId) {
+                try {
+                    const convRes = await fetch(`${API_BASE}/conversations`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            Authorization: `Bearer ${token}`,
+                        },
+                    })
+                    const convData = await convRes.json()
+                    convId = convData.id
+                    setActiveConversationId(convId)
+                    setConversations(prev => [convData, ...prev])
+                    isFirstMessage.current = true
+                } catch (err) {
+                    console.error('Failed to create conversation for upload:', err)
+                }
+            }
+
+            if (convId) {
+                formData.append('conversation_id', convId)
+            }
+
             const tempDoc = {
                 id: Date.now(),
                 name: file.name,
@@ -209,12 +234,7 @@ function App() {
             const res = await fetch(`${API_BASE}/ingest`, {
                 method: 'POST',
                 headers: { Authorization: `Bearer ${token}` },
-                body: (() => {
-                    if (activeConversationId) {
-                        formData.append('conversation_id', activeConversationId)
-                    }
-                    return formData
-                })(),
+                body: formData,
             })
 
             if (!res.ok) throw new Error('Upload failed')
