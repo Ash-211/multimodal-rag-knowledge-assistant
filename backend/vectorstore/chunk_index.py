@@ -6,10 +6,17 @@ import os
 
 class ChunkIndex:
     def __init__(self):
-        self.model = SentenceTransformer("all-MiniLM-L6-v2")
+        self._model = None
         # Global index for ALL chunks
         self.index = None
         self.chunks = []  # List of dicts: {"source": str, "text": str}
+
+    @property
+    def model(self):
+        if self._model is None:
+            from sentence_transformers import SentenceTransformer
+            self._model = SentenceTransformer("all-MiniLM-L6-v2")
+        return self._model
 
     def add_chunks(self, source, chunks):
         """

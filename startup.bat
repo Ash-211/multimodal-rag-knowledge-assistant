@@ -2,8 +2,8 @@
 
 echo Starting both frontend and backend development servers
 
-REM Start the backend in a new cmd and keep it open
-start cmd /k "cd backend && uvicorn main:app --reload"
+REM Start the backend in a new cmd using the venv Python 3.13
+start cmd /k "cd backend && ..\venv\Scripts\activate && uvicorn main:app --reload"
 
 REM Start the frontend in a new cmd and keep it open
 start cmd /k "cd frontend && npm run dev"

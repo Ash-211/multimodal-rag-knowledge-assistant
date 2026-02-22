@@ -100,7 +100,7 @@ app = FastAPI()
 # Enable CORS for Frontend (React default port is 5173)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=os.getenv("CORS_ORIGINS", "http://localhost:5173").split(","),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -137,9 +137,9 @@ async def startup_event():
     else:
         print("No indices found. System execution will rely on /ingest endpoint.")
 
-@app.get("/")
+@app.get("/api/health")
 def health_check():
-    return {"status": "ok", "message": "Multimodal RAG Backend Ready"}
+    return {"status": "ok", "message": "VectorMind Backend Ready"}
 
 class UserRegister(BaseModel):
     username: str
@@ -363,7 +363,7 @@ async def chat_endpoint(
         
     # 5. Format Response for Frontend
     # Convert local image paths to URLs
-    base_url = f"http://localhost:8000/images/{username}/"
+    base_url = f"/images/{username}/"
     frontend_images = []
     for img in image_results:
         fname = os.path.basename(img["image_path"])
@@ -401,8 +401,10 @@ async def chat_stream_endpoint(
     
     if not os.path.exists(USER_CHUNK_INDEX_PATH):
         async def no_docs():
-            yield f"data: {json.dumps({'type': 'text', 'content': 'You haven\'t uploaded any documents yet. Please upload a PDF first.'})}\n\n"
-            yield f"data: {json.dumps({'type': 'done', 'sources': [], 'images': []})}\n\n"
+            no_docs_msg = json.dumps({'type': 'text', 'content': "You haven't uploaded any documents yet. Please upload a PDF first."})
+            done_msg = json.dumps({'type': 'done', 'sources': [], 'images': []})
+            yield f"data: {no_docs_msg}\n\n"
+            yield f"data: {done_msg}\n\n"
         return StreamingResponse(no_docs(), media_type="text/event-stream")
     
     user_chunk_index.load_local(USER_CHUNK_INDEX_PATH)
@@ -427,7 +429,7 @@ async def chat_stream_endpoint(
     image_results = user_image_store.search(query, k=4)
     
     # 4. Format images for frontend
-    base_url = f"http://localhost:8000/images/{username}/"
+    base_url = f"/images/{username}/"
     frontend_images = []
     for img in image_results:
         fname = os.path.basename(img["image_path"])
@@ -608,3 +610,13 @@ async def clear_all_chat_history(username: str = Depends(get_current_user)):
     conn.commit()
     conn.close()
     return {"message": "All chat history cleared"}
+
+frontend_dist = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
+if os.path.isdir(frontend_dist):
+    from fastapi.responses import FileResponse
+    @app.get("/{full_path:path}")
+    async def serve_frontend(full_path: str):
+        file_path = os.path.join(frontend_dist, full_path)
+        if os.path.isfile(file_path):
+            return FileResponse(file_path)
+        return FileResponse(os.path.join(frontend_dist, "index.html"))

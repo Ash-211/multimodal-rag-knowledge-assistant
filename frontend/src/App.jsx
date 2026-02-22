@@ -3,7 +3,7 @@ import TopNav from './components/TopNav'
 import Sidebar from './components/Sidebar'
 import ChatArea from './components/ChatArea'
 
-const API_BASE = 'http://localhost:8000'
+const API_BASE = import.meta.env.VITE_API_BASE || ''
 
 function App() {
     const [sidebarOpen, setSidebarOpen] = useState(true)

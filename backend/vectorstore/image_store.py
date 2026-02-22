@@ -8,9 +8,24 @@ import pickle
 class ImageVectorStore:
     def __init__(self):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.model, self.preprocess = clip.load("ViT-B/32", device=self.device)
+        self._model = None
+        self._preprocess = None
         self.index = faiss.IndexFlatL2(512)  # 512 is the dimension of the embeddings from the model
         self.metadata = []
+
+    def _load_clip(self):
+        if self._model is None:
+            self._model, self._preprocess = clip.load("ViT-B/32", device=self.device)
+
+    @property
+    def model(self):
+        self._load_clip()
+        return self._model
+
+    @property
+    def preprocess(self):
+        self._load_clip()
+        return self._preprocess
 
     def add_images(self, image_paths, metadatas):
         images = [

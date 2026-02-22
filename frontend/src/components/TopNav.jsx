@@ -80,7 +80,7 @@ function TopNav({
                                 </defs>
                             </svg>
                         </div>
-                        <span className="brand-name">RAG Assistant</span>
+                        <span className="brand-name">VectorMind</span>
                     </div>
                 </div>
 

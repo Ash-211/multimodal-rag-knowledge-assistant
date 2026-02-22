@@ -76,7 +76,7 @@ function ChatArea({
                             </defs>
                         </svg>
                     </div>
-                    <h1>RAG Knowledge Assistant</h1>
+                    <h1>VectorMind</h1>
                     <p>Upload documents and ask questions to get AI-powered answers with source citations</p>
                     <div className="welcome-features">
                         <div className="feature-card">
