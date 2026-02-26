@@ -1,0 +1,380 @@
+/* =============================================
+   Canvas-style message layout (ChatGPT / Gemini)
+   ============================================= */
+
+/* --- Row container --- */
+.message-row {
+    animation: fadeInUp var(--transition-slow) ease;
+    padding: var(--space-2) 0;
+}
+
+.message-row+.message-row {
+    border-top: 1px solid var(--border-subtle);
+}
+
+/* Alternating background for assistant rows */
+.message-row.assistant {
+    background: var(--bg-secondary);
+    border-radius: var(--radius-lg);
+    padding: var(--space-4) var(--space-3);
+}
+
+.message-row.user {
+    padding: var(--space-4) var(--space-3);
+}
+
+.message-row.error {
+    padding: var(--space-4) var(--space-3);
+}
+
+/* --- Inner layout: icon + body --- */
+.message-inner {
+    display: flex;
+    gap: var(--space-4);
+    align-items: flex-start;
+    max-width: 100%;
+}
+
+/* --- Role Icon --- */
+.role-icon-wrapper {
+    flex-shrink: 0;
+    padding-top: 2px;
+}
+
+.role-icon {
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-md);
+}
+
+.role-icon.assistant-icon {
+    background: var(--accent-gradient);
+    color: white;
+}
+
+.role-icon.user-icon {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-medium);
+    color: var(--text-secondary);
+}
+
+.role-icon.error-icon {
+    background: var(--error-bg);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    color: var(--error);
+}
+
+/* --- Message Body --- */
+.message-body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+
+/* --- Text / Markdown --- */
+.message-text {
+    font-size: var(--text-base);
+    line-height: 1.75;
+    color: var(--text-primary);
+    word-break: break-word;
+}
+
+/* Markdown typography inside assistant messages */
+.message-row.assistant .message-text p {
+    margin-bottom: 0.75em;
+}
+
+.message-row.assistant .message-text p:last-child {
+    margin-bottom: 0;
+}
+
+.message-row.assistant .message-text strong {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.message-row.assistant .message-text em {
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+.message-row.assistant .message-text h1,
+.message-row.assistant .message-text h2,
+.message-row.assistant .message-text h3,
+.message-row.assistant .message-text h4 {
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-top: 1.25em;
+    margin-bottom: 0.5em;
+}
+
+.message-row.assistant .message-text h1 {
+    font-size: 1.4em;
+}
+
+.message-row.assistant .message-text h2 {
+    font-size: 1.25em;
+}
+
+.message-row.assistant .message-text h3 {
+    font-size: 1.1em;
+}
+
+.message-row.assistant .message-text ul,
+.message-row.assistant .message-text ol {
+    padding-left: 1.5em;
+    margin-bottom: 0.75em;
+}
+
+.message-row.assistant .message-text li {
+    margin-bottom: 0.35em;
+}
+
+.message-row.assistant .message-text li::marker {
+    color: var(--accent-secondary);
+}
+
+.message-row.assistant .message-text code {
+    font-family: var(--font-mono);
+    font-size: 0.875em;
+    background: var(--bg-elevated);
+    padding: 0.15em 0.4em;
+    border-radius: var(--radius-sm);
+    color: var(--accent-tertiary);
+}
+
+.message-row.assistant .message-text pre {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: var(--space-4);
+    overflow-x: auto;
+    margin-bottom: 0.75em;
+}
+
+.message-row.assistant .message-text pre code {
+    background: transparent;
+    padding: 0;
+    color: var(--text-primary);
+}
+
+.message-row.assistant .message-text blockquote {
+    border-left: 3px solid var(--accent-primary);
+    padding-left: var(--space-4);
+    color: var(--text-secondary);
+    margin-bottom: 0.75em;
+}
+
+.message-row.assistant .message-text a {
+    color: var(--accent-secondary);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.message-row.assistant .message-text a:hover {
+    color: var(--accent-tertiary);
+}
+
+/* User message style — slightly dimmer */
+.message-row.user .message-text {
+    color: var(--text-primary);
+}
+
+/* Error message style */
+.message-row.error .message-text {
+    color: var(--error);
+}
+
+/* --- Images --- */
+.message-images {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+}
+
+.image-thumb {
+    position: relative;
+    width: 100px;
+    height: 100px;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    border: 1px solid var(--border-subtle);
+    cursor: pointer;
+    background: var(--bg-tertiary);
+    padding: 0;
+    transition: all var(--transition-base);
+}
+
+.image-thumb:hover {
+    border-color: var(--accent-primary);
+    transform: scale(1.05);
+}
+
+.image-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.image-page {
+    position: absolute;
+    bottom: var(--space-1);
+    right: var(--space-1);
+    padding: var(--space-1) var(--space-2);
+    background: rgba(0, 0, 0, 0.7);
+    border-radius: var(--radius-sm);
+    font-size: var(--text-xs);
+    color: white;
+}
+
+/* --- Sources --- */
+.message-sources {
+    margin-top: var(--space-1);
+}
+
+.sources-toggle {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    background: var(--bg-glass);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    color: var(--text-secondary);
+    font-size: var(--text-sm);
+    cursor: pointer;
+    transition: all var(--transition-base);
+}
+
+.sources-toggle:hover {
+    background: var(--bg-glass-hover);
+    color: var(--text-primary);
+}
+
+.sources-toggle .chevron {
+    transition: transform var(--transition-base);
+}
+
+.sources-toggle .chevron.open {
+    transform: rotate(180deg);
+}
+
+.sources-list {
+    margin-top: var(--space-2);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    animation: fadeIn var(--transition-base) ease;
+}
+
+.source-item {
+    padding: var(--space-3);
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+}
+
+.source-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-2);
+}
+
+.source-num {
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--accent-primary);
+    color: white;
+    border-radius: var(--radius-full);
+    font-size: var(--text-xs);
+    font-weight: 600;
+}
+
+.source-file {
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--text-primary);
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.source-score {
+    font-size: var(--text-xs);
+    color: var(--success);
+    padding: var(--space-1) var(--space-2);
+    background: var(--success-bg);
+    border-radius: var(--radius-full);
+}
+
+.source-content {
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+    line-height: 1.6;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* --- Image Modal --- */
+.image-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    animation: fadeIn var(--transition-fast) ease;
+}
+
+.image-modal-content {
+    position: relative;
+    max-width: 90vw;
+    max-height: 90vh;
+    animation: fadeInUp var(--transition-base) ease;
+}
+
+.modal-close {
+    position: absolute;
+    top: calc(-1 * var(--space-10));
+    right: 0;
+    color: white;
+}
+
+.image-modal-content img {
+    max-width: 100%;
+    max-height: 80vh;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-xl);
+}
+
+.image-caption {
+    text-align: center;
+    color: var(--text-secondary);
+    margin-top: var(--space-3);
+    font-size: var(--text-sm);
+}
+
+/* --- Responsive --- */
+@media (max-width: 768px) {
+    .message-inner {
+        gap: var(--space-3);
+    }
+
+    .image-thumb {
+        width: 80px;
+        height: 80px;
+    }
+}

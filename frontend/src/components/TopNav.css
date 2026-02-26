@@ -1,0 +1,211 @@
+.topnav {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 var(--space-6);
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-subtle);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.topnav-left {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+}
+
+.sidebar-toggle {
+    display: flex;
+}
+
+.topnav-brand {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+}
+
+.brand-icon {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-glass);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-subtle);
+}
+
+.brand-name {
+    font-size: var(--text-lg);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    background: var(--accent-gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.topnav-right {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+}
+
+.user-menu {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+}
+
+.user-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-full);
+    background: var(--accent-gradient);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: white;
+}
+
+.user-name {
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+}
+
+/* Modal Styles */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    animation: fadeIn var(--transition-fast) ease;
+}
+
+.modal {
+    width: 100%;
+    max-width: 400px;
+    margin: var(--space-4);
+    animation: fadeInUp var(--transition-base) ease;
+}
+
+.modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--space-6);
+}
+
+.modal-header h2 {
+    font-size: var(--text-xl);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+}
+
+.auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-5);
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.form-row {
+    display: flex;
+    gap: var(--space-3);
+}
+
+.form-row .form-group {
+    flex: 1;
+}
+
+.form-group label {
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.auth-error {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-3) var(--space-4);
+    background: var(--error-bg);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    border-radius: var(--radius-md);
+    color: var(--error);
+    font-size: var(--text-sm);
+}
+
+.auth-switch {
+    text-align: center;
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+}
+
+.auth-switch button {
+    background: none;
+    border: none;
+    color: var(--accent-primary);
+    cursor: pointer;
+    font-size: inherit;
+    padding: 0;
+}
+
+.auth-switch button:hover {
+    text-decoration: underline;
+}
+
+/* Loading Dots */
+.loading-dots {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.loading-dots span {
+    width: 6px;
+    height: 6px;
+    background: currentColor;
+    border-radius: 50%;
+    animation: bounce 1.4s ease-in-out infinite;
+}
+
+.loading-dots span:nth-child(1) {
+    animation-delay: 0s;
+}
+
+.loading-dots span:nth-child(2) {
+    animation-delay: 0.16s;
+}
+
+.loading-dots span:nth-child(3) {
+    animation-delay: 0.32s;
+}
+
+@media (max-width: 768px) {
+    .topnav {
+        padding: 0 var(--space-4);
+    }
+
+    .brand-name {
+        display: none;
+    }
+
+    .user-name {
+        display: none;
+    }
+}
