@@ -1,12 +1,42 @@
+# FastAPI & Server
 fastapi
-uvicorn
-streamlit
+uvicorn[standard]
+python-multipart
+
+protobuf==5.28.3
+timm==0.9.16
+
+# Authentication
+python-jose[cryptography]
+passlib[bcrypt]
+bcrypt==4.0.1
+python-dotenv
+
+# PDF Processing
 pymupdf
+
+# Image Processing
 pillow
-sentence-transformers
-faiss-cpu
+clip @ git+https://github.com/openai/CLIP.git
+
+# Machine Learning & Embeddings
 torch
 transformers
-python-multipart
+sentence-transformers
+faiss-cpu
+
+# RAG Components
 langchain
 tqdm
+
+# Audio Processing (optional)
+openai-whisper
+
+# Google Generative AI
+google-genai
+
+# Groq (fallback LLM)
+groq
+# Utilities
+numpy
+pydantic
