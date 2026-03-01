@@ -1,6 +1,7 @@
 import os
 from dotenv import load_dotenv
 import google.genai as genai
+from PIL import Image
 load_dotenv()
 
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
@@ -18,20 +19,14 @@ def _get_groq_client():
 GROQ_MODEL = "llama-3.3-70b-versatile"
 
 
+
 def _build_prompt(query, text_contexts, image_contexts):
-    """Build the shared prompt for both Gemini and Groq."""
+    """Build the text-only prompt (shared by Gemini and Groq)."""
     text_block = "\n\n".join(
         [f"[Text Source {i+1}]\n{ctx['content']}"
         for i, ctx in enumerate(text_contexts)]
     )
-
-    image_block = "\n\n".join(
-        [f"[Image Source {i+1}] Page {ctx['page']} -> {ctx['image_path']}"
-         for i, ctx in enumerate(image_contexts)]
-    )
-
     return f"""You are VectorMind, a smart and conversational AI assistant. The user has uploaded documents, and the relevant excerpts are provided below as context.
-
 Your job is to be genuinely helpful. You should:
 - Answer questions using the provided context as your primary source of truth
 - Analyze, interpret, summarize, compare, evaluate, or give opinions about the content when asked
@@ -39,16 +34,26 @@ Your job is to be genuinely helpful. You should:
 - If the user asks you to do something with the document content (evaluate, critique, improve, etc.), do your best using what you have
 - Only say you don't have enough information if the context truly has nothing relevant
 - Cite your sources naturally, like (Text Source 1) or (Image Source 2)
-
 TEXT CONTEXT:
 {text_block}
-
-IMAGE CONTEXT:
-{image_block}
-
 QUESTION:
 {query}
 """
+
+def _load_images(image_contexts):
+    images = []
+    for i, ctx in enumerate(image_contexts):
+        path = ctx.get("image_path", "")
+        if os.path.isfile(path):
+            try:
+                img = Image.open(path)
+                images.append((f"[Image Source {i+1}] from page {ctx.get('page', '?')}", img))
+            except Exception:
+                pass
+    return images
+                
+
+
 
 
 def generate_title(user_message):
@@ -93,10 +98,16 @@ Only return the search queries.
 def generate_answer(query, text_contexts, image_contexts):
     prompt = _build_prompt(query, text_contexts, image_contexts)
 
+    contents = [prompt]
+    loaded_images = _load_images(image_contexts)
+    for label, img in loaded_images:
+        contents.append(img)
+        contents.append(label)
+
     try:
         response = client.models.generate_content(
             model="gemini-2.5-flash",
-            contents=prompt
+            contents=contents
         )
         return response.text
     except Exception as e:
@@ -109,10 +120,16 @@ def generate_answer_stream(query, text_contexts, image_contexts):
     """Streaming version — tries Gemini first, falls back to Groq on rate limit."""
     prompt = _build_prompt(query, text_contexts, image_contexts)
 
+    contents = [prompt]
+    loaded_images = _load_images(image_contexts)
+    for label, img in loaded_images:
+        contents.append(img)
+        contents.append(label)
+    
     try:
         response = client.models.generate_content_stream(
             model="gemini-2.5-flash",
-            contents=prompt,
+            contents=contents,
         )
         for chunk in response:
             if chunk.text:
@@ -122,7 +139,6 @@ def generate_answer_stream(query, text_contexts, image_contexts):
             yield from _groq_generate_stream(prompt)
         else:
             raise
-
 
 def _is_rate_limit(error):
     """Check if the error is a rate limit / quota error."""
